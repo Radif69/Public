@@ -51,6 +51,32 @@ app.get('/rooms', (req, res) => {
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
   
+  // Handle creating a room
+  socket.on('createRoom', (data) => {
+    const { roomId, username } = data;
+    console.log(`${username} is creating room ${roomId}`);
+    
+    // Initialize the room if it doesn't exist
+    if (!rooms[roomId]) {
+      rooms[roomId] = {
+        host: socket.id,  // The creator is the host
+        users: {}
+      };
+      rooms[roomId].users[socket.id] = {
+        username,
+        isHost: true
+      };
+
+      console.log(`Room ${roomId} created with host: ${username}`);
+      
+      // Notify the client that the room is created
+      socket.emit('roomCreated', { roomId });
+    } else {
+      // If room already exists, send an error message
+      socket.emit('roomError', { message: 'Room already exists' });
+    }
+  });
+
   // Handle joining a room
   socket.on('joinRoom', (data) => {
     const { roomId, username, isHost } = data;
@@ -79,7 +105,6 @@ io.on('connection', (socket) => {
     }
     
     // Notify everyone in the room that a new user joined
-    // Important: this must use "to" not "in" to broadcast to all clients including the sender
     io.to(roomId).emit('userJoined', {
       username,
       isHost
@@ -88,7 +113,7 @@ io.on('connection', (socket) => {
     console.log(`${username} joined room ${roomId}`);
     console.log(`Room ${roomId} now has ${Object.keys(rooms[roomId].users).length} users`);
   });
-  
+
   // Handle chat messages
   socket.on('chatMessage', (data) => {
     const { roomId, username, message } = data;
